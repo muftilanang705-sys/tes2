@@ -66,25 +66,26 @@
             overflow: hidden;
         }
 
+        #board-container {
+            position: relative; /* Ditambahkan agar kanvas bisa menempel dengan benar di dalam */
+            width: 100%;
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: auto;
+            padding: 20px 20px 50vh 20px; /* Jarak atas sudah dirapatkan */
+            display: flex;
+            gap: 25px;
+            scroll-behavior: smooth;
+            box-sizing: border-box;
+        }
+
+        /* Posisi kanvas dipindah ke dalam container */
         #line-canvas {
             position: absolute;
             top: 0;
             left: 0;
             pointer-events: none; 
             z-index: 5;
-        }
-
-        #board-container {
-            width: 100%;
-            height: 100%;
-            overflow-x: auto;
-            overflow-y: auto;
-            /* Padding atas dan bawah dilonggarkan agar nyaman saat scroll otomatis */
-            padding: 50vh 20px 50vh 20px; 
-            display: flex;
-            gap: 25px;
-            scroll-behavior: smooth;
-            box-sizing: border-box;
         }
 
         .column {
@@ -148,7 +149,7 @@
         
         .chart-container { 
             width: 100%; 
-            height: 120px; /* Diperkecil khusus untuk HP */
+            height: 120px; 
             margin-bottom: 15px; 
         }
 
@@ -175,8 +176,9 @@
     </header>
 
     <div id="board-wrapper">
-        <canvas id="line-canvas"></canvas>
-        <div id="board-container"></div>
+        <div id="board-container">
+            <canvas id="line-canvas"></canvas> <!-- Posisi Kanvas dimasukkan ke dalam area scroll -->
+        </div>
     </div>
 
     <div id="results">
@@ -222,7 +224,11 @@
         const board = document.getElementById('board-container');
 
         function initBoard() {
+            // Hapus isi sebelumnya kecuali canvas
+            const canvas = document.getElementById('line-canvas');
             board.innerHTML = ''; 
+            board.appendChild(canvas);
+
             for (let c = 0; c < TOTAL_COLUMNS; c++) {
                 const colDiv = document.createElement('div');
                 colDiv.className = 'column';
@@ -267,7 +273,6 @@
                             wrongAnswers++;
                         }
                         
-                        // LOGIKA KRAEPELIN: PINDAH KE ATAS (r - 1)
                         const nextRow = r - 1;
                         if (nextRow >= 0) {
                             const nextInput = document.querySelector(`input[data-col="${c}"][data-row="${nextRow}"]`);
@@ -329,7 +334,6 @@
             const inputs = currentCol.querySelectorAll('input');
             let lastFilledInput = null;
 
-            // Cari input paling atas yang terisi (karena kerjanya dari bawah ke atas)
             for (let i = 0; i < inputs.length; i++) {
                 if (inputs[i].value !== '') {
                     lastFilledInput = inputs[i];
@@ -337,15 +341,16 @@
                 }
             }
             
-            // Jika kosong, ambil titik paling bawah sebagai default
             if (!lastFilledInput) lastFilledInput = inputs[inputs.length - 1];
 
             const rect = lastFilledInput.getBoundingClientRect();
-            const wrapperRect = document.getElementById('board-wrapper').getBoundingClientRect();
+            const container = document.getElementById('board-container');
+            const containerRect = container.getBoundingClientRect();
 
+            // Memperbaiki koordinat agar memperhitungkan posisi scroll
             lastAnswerPoints.push({
-                x: rect.left - wrapperRect.left + (rect.width / 2),
-                y: rect.top - wrapperRect.top + (rect.height / 2)
+                x: rect.left - containerRect.left + container.scrollLeft + (rect.width / 2),
+                y: rect.top - containerRect.top + container.scrollTop + (rect.height / 2)
             });
         }
 
@@ -366,7 +371,6 @@
             inputs.forEach(inp => inp.disabled = false);
             
             setTimeout(() => {
-                // LOGIKA KRAEPELIN: FOKUS KE KOTAK PALING BAWAH
                 const startInput = inputs[inputs.length - 1];
                 if (startInput) {
                     startInput.focus();
@@ -399,10 +403,11 @@
 
         function drawZigZagLine() {
             const canvas = document.getElementById('line-canvas');
-            const wrapper = document.getElementById('board-wrapper');
+            const container = document.getElementById('board-container');
             
-            canvas.width = wrapper.clientWidth;
-            canvas.height = wrapper.clientHeight;
+            // Ukuran kanvas disamakan dengan total area scroll kertas
+            canvas.width = container.scrollWidth;
+            canvas.height = container.scrollHeight;
 
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -477,7 +482,7 @@
                     scales: {
                         y: { 
                             beginAtZero: true, 
-                            ticks: { display: false }, // Angka di sumbu Y disembunyikan agar lebih ringkas
+                            ticks: { display: false }, 
                             grid: { color: '#e5e7eb' },
                             suggestedMax: Math.max(...history, 10) + 10 
                         },
