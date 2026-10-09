@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tes Kraepelin - Bawah ke Atas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        
+        :root {
+            --bg-color: #fcfcfc;
+            --surface: #ffffff;
+            --text-main: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #1d4ed8; 
+            --success: #16a34a;
+            --danger: #dc2626;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--text-main);
+            background-color: var(--bg-color);
+            z-index: 10;
+        }
+
+        .stats { display: flex; gap: 20px; font-size: 14px; }
+        .stat-box { display: flex; flex-direction: column; }
+        .stat-label { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 2px; }
+        .stat-value { font-weight: 600; font-size: 16px; }
+
+        button {
+            background-color: var(--text-main);
+            color: var(--bg-color);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.8; }
+        button:disabled { background-color: var(--border); color: var(--text-muted); cursor: not-allowed; }
+
+        #board-wrapper {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #line-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none; 
+            z-index: 5;
+        }
+
+        #board-container {
+            width: 100%;
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: auto;
+            /* Padding atas dan bawah dilonggarkan agar nyaman saat scroll otomatis */
+            padding: 50vh 20px 50vh 20px; 
+            display: flex;
+            gap: 25px;
+            scroll-behavior: smooth;
+            box-sizing: border-box;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            opacity: 0.3;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .column.active, .column.done { opacity: 1; pointer-events: auto; }
+
+        .cell {
+            position: relative;
+            height: 22px;
+            display: flex;
+            justify-content: center;
+            width: 14px;
+        }
+
+        .number {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 22px;
+            color: #000;
+        }
+
+        .input-box {
+            position: absolute;
+            top: 11px;
+            left: 100%; 
+            margin-left: 2px;
+            width: 20px; 
+            height: 20px;
+            background: transparent; 
+            border: none;
+            color: var(--accent);
+            font-size: 14px; 
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            text-align: left; 
+            outline: none; 
+            padding: 0;
+            caret-color: var(--accent);
+        }
+
+        .input-box:focus { border-bottom: 1px solid rgba(29, 78, 216, 0.3); }
+        .input-box:disabled { color: var(--text-muted); }
+
+        #results {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--surface); padding: 20px; border-radius: 8px;
+            border: 2px solid var(--text-main); text-align: center; display: none;
+            box-shadow: 10px 10px 0px rgba(0,0,0,0.15);
+            width: 85%; max-width: 350px; max-height: 90vh; overflow-y: auto;
+            z-index: 20;
+        }
+
+        #results h2 { margin-top: 0; margin-bottom: 15px; color: var(--text-main); font-weight: 700; font-size: 18px; text-transform: uppercase;}
+        .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        
+        .chart-container { 
+            width: 100%; 
+            height: 120px; /* Diperkecil khusus untuk HP */
+            margin-bottom: 15px; 
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h2 style="margin:0; font-size: 16px; font-weight: 700; text-transform: uppercase;">Tes Kraepelin</h2>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">(Bawah ke Atas)</div>
+        </div>
+        <div class="stats">
+            <div class="stat-box">
+                <span class="stat-label">Waktu</span>
+                <span class="stat-value" id="time-display">02:00</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-label">Kolom</span>
+                <span class="stat-value" id="col-display">0</span>
+            </div>
+        </div>
+        <button id="start-btn" onclick="startTest()">Mulai</button>
+    </header>
+
+    <div id="board-wrapper">
+        <canvas id="line-canvas"></canvas>
+        <div id="board-container"></div>
+    </div>
+
+    <div id="results">
+        <h2>WAKTU HABIS!</h2>
+        
+        <div class="result-grid">
+            <div class="stat-box" style="border: 1px solid var(--border); padding: 10px; border-radius: 6px;">
+                <span class="stat-label">Benar</span>
+                <span class="stat-value" id="res-correct" style="color: var(--success); font-size: 24px;">0</span>
+            </div>
+            <div class="stat-box" style="border: 1px solid var(--border); padding: 10px; border-radius: 6px;">
+                <span class="stat-label">Salah</span>
+                <span class="stat-value" id="res-wrong" style="color: var(--danger); font-size: 24px;">0</span>
+            </div>
+        </div>
+        
+        <div style="text-align: left; font-size: 10px; color: var(--text-muted); font-weight:600; text-transform:uppercase; margin-top: 10px;">Grafik Konsistensi:</div>
+        <div class="chart-container">
+            <canvas id="historyChart"></canvas>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button onclick="clearHistory()" style="flex: 1; background-color: var(--danger);">Reset Data</button>
+            <button onclick="location.reload()" style="flex: 2;">Main Lagi</button>
+        </div>
+    </div>
+
+    <script>
+        const TOTAL_COLUMNS = 20; 
+        const NUMS_PER_COL = 35; 
+        const TEST_DURATION = 120; // 2 Menit
+        const INTERVAL_TIME = 15; // Pindah kolom tiap 15 detik
+
+        let timer;
+        let intervalTimer;
+        let timeLeft = TEST_DURATION;
+        let activeCol = 0;
+        let correctAnswers = 0;
+        let wrongAnswers = 0;
+        let isPlaying = false;
+        let lastAnswerPoints = [];
+
+        const board = document.getElementById('board-container');
+
+        function initBoard() {
+            board.innerHTML = ''; 
+            for (let c = 0; c < TOTAL_COLUMNS; c++) {
+                const colDiv = document.createElement('div');
+                colDiv.className = 'column';
+                colDiv.id = `col-${c}`;
+                
+                let numbers = [];
+                for(let i=0; i <= NUMS_PER_COL; i++) {
+                    numbers.push(Math.floor(Math.random() * 10));
+                }
+                
+                for (let r = 0; r < NUMS_PER_COL; r++) {
+                    const topNum = numbers[r];
+                    const bottomNum = numbers[r+1];
+                    const expectedAns = (topNum + bottomNum) % 10;
+                    
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    
+                    const numDiv = document.createElement('div');
+                    numDiv.className = 'number';
+                    numDiv.innerText = topNum;
+                    cell.appendChild(numDiv);
+
+                    const input = document.createElement('input');
+                    input.className = 'input-box';
+                    input.type = 'number';
+                    input.inputMode = 'numeric';
+                    input.maxLength = 1;
+                    input.dataset.col = c;
+                    input.dataset.row = r;
+                    input.dataset.ans = expectedAns;
+                    input.disabled = true;
+
+                    input.addEventListener('input', (e) => {
+                        let val = e.target.value;
+                        if (val.length > 1) { val = val.slice(-1); e.target.value = val; }
+                        if (!/^[0-9]$/.test(val)) { e.target.value = ''; return; }
+                        
+                        if (parseInt(val) === parseInt(e.target.dataset.ans)) {
+                            correctAnswers++;
+                        } else {
+                            wrongAnswers++;
+                        }
+                        
+                        // LOGIKA KRAEPELIN: PINDAH KE ATAS (r - 1)
+                        const nextRow = r - 1;
+                        if (nextRow >= 0) {
+                            const nextInput = document.querySelector(`input[data-col="${c}"][data-row="${nextRow}"]`);
+                            if(nextInput) {
+                                nextInput.focus();
+                                nextInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }
+                    });
+
+                    cell.appendChild(input);
+                    colDiv.appendChild(cell);
+                }
+                
+                const lastCell = document.createElement('div');
+                lastCell.className = 'cell';
+                const lastNumDiv = document.createElement('div');
+                lastNumDiv.className = 'number';
+                lastNumDiv.innerText = numbers[NUMS_PER_COL];
+                lastCell.appendChild(lastNumDiv);
+                colDiv.appendChild(lastCell);
+
+                board.appendChild(colDiv);
+            }
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function startTest() {
+            if (isPlaying) return;
+            isPlaying = true;
+            document.getElementById('start-btn').disabled = true;
+            
+            activateColumn(0);
+
+            timer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('time-display').innerText = formatTime(timeLeft);
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+
+            intervalTimer = setInterval(() => {
+                recordLastPoint(activeCol);
+                activeCol++;
+                if (activeCol < TOTAL_COLUMNS) {
+                    activateColumn(activeCol);
+                } else {
+                    endGame();
+                }
+            }, INTERVAL_TIME * 1000);
+        }
+
+        function recordLastPoint(colIndex) {
+            const currentCol = document.getElementById(`col-${colIndex}`);
+            const inputs = currentCol.querySelectorAll('input');
+            let lastFilledInput = null;
+
+            // Cari input paling atas yang terisi (karena kerjanya dari bawah ke atas)
+            for (let i = 0; i < inputs.length; i++) {
+                if (inputs[i].value !== '') {
+                    lastFilledInput = inputs[i];
+                    break;
+                }
+            }
+            
+            // Jika kosong, ambil titik paling bawah sebagai default
+            if (!lastFilledInput) lastFilledInput = inputs[inputs.length - 1];
+
+            const rect = lastFilledInput.getBoundingClientRect();
+            const wrapperRect = document.getElementById('board-wrapper').getBoundingClientRect();
+
+            lastAnswerPoints.push({
+                x: rect.left - wrapperRect.left + (rect.width / 2),
+                y: rect.top - wrapperRect.top + (rect.height / 2)
+            });
+        }
+
+        function activateColumn(colIndex) {
+            if (colIndex > 0) {
+                const prevCol = document.getElementById(`col-${colIndex-1}`);
+                prevCol.classList.remove('active');
+                prevCol.classList.add('done');
+                const prevInputs = prevCol.querySelectorAll('input');
+                prevInputs.forEach(inp => inp.disabled = true);
+            }
+
+            document.getElementById('col-display').innerText = colIndex + 1;
+            const current = document.getElementById(`col-${colIndex}`);
+            current.classList.add('active');
+            
+            const inputs = current.querySelectorAll('input');
+            inputs.forEach(inp => inp.disabled = false);
+            
+            setTimeout(() => {
+                // LOGIKA KRAEPELIN: FOKUS KE KOTAK PALING BAWAH
+                const startInput = inputs[inputs.length - 1];
+                if (startInput) {
+                    startInput.focus();
+                    startInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 50);
+        }
+
+        function endGame() {
+            clearInterval(timer);
+            clearInterval(intervalTimer);
+            
+            if (isPlaying) {
+                recordLastPoint(activeCol);
+                isPlaying = false;
+            }
+
+            document.querySelectorAll('input').forEach(inp => inp.disabled = true);
+            drawZigZagLine();
+
+            setTimeout(() => {
+                const res = document.getElementById('results');
+                res.style.display = 'block';
+                document.getElementById('res-correct').innerText = correctAnswers;
+                document.getElementById('res-wrong').innerText = wrongAnswers;
+
+                processScores();
+            }, 800); 
+        }
+
+        function drawZigZagLine() {
+            const canvas = document.getElementById('line-canvas');
+            const wrapper = document.getElementById('board-wrapper');
+            
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
+
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (lastAnswerPoints.length < 2) return;
+
+            ctx.beginPath();
+            ctx.strokeStyle = '#1d4ed8'; 
+            ctx.lineWidth = 2.5;
+            ctx.lineJoin = 'round';
+
+            ctx.moveTo(lastAnswerPoints[0].x, lastAnswerPoints[0].y);
+            for (let i = 1; i < lastAnswerPoints.length; i++) {
+                ctx.lineTo(lastAnswerPoints[i].x, lastAnswerPoints[i].y);
+            }
+            ctx.stroke();
+        }
+
+        function processScores() {
+            let history = JSON.parse(localStorage.getItem('tesKraepelinHistory')) || [];
+            history.push(correctAnswers);
+            localStorage.setItem('tesKraepelinHistory', JSON.stringify(history));
+            renderChart(history);
+        }
+
+        function clearHistory() {
+            if(confirm('Yakin ingin menghapus riwayat tes ini?')) {
+                localStorage.removeItem('tesKraepelinHistory');
+                location.reload();
+            }
+        }
+
+        function renderChart(history) {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            const labels = history.map((_, i) => `T${i + 1}`);
+
+            const showValuesPlugin = {
+                id: 'showValues',
+                afterDatasetsDraw(chart) {
+                    const { ctx, data } = chart;
+                    ctx.save();
+                    ctx.font = 'bold 10px Inter, sans-serif';
+                    ctx.fillStyle = '#111827'; 
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    
+                    chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
+                        const value = data.datasets[0].data[index];
+                        ctx.fillText(value, datapoint.x, datapoint.y - 4);
+                    });
+                    ctx.restore();
+                }
+            };
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Skor',
+                        data: history,
+                        backgroundColor: '#16a34a', 
+                        borderColor: '#15803d',
+                        borderWidth: 1,
+                        borderRadius: 2 
+                    }]
+                },
+                options: {
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 15 } },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { display: false }, // Angka di sumbu Y disembunyikan agar lebih ringkas
+                            grid: { color: '#e5e7eb' },
+                            suggestedMax: Math.max(...history, 10) + 10 
+                        },
+                        x: { ticks: { color: '#6b7280', font: {size: 10} }, grid: { display: false } }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: { enabled: false } 
+                    }
+                },
+                plugins: [showValuesPlugin] 
+            });
+        }
+
+        initBoard();
+    </script>
+</body>
+</html>
